@@ -19,7 +19,7 @@ module playground::coin_v2 {
         name: String,
         symbol: String,
         decimals: u8
-    ): (MintRef, TransferRef, BurnRef) {
+    ): (MintRef, TransferRef, BurnRef, Object<Metadata>) {
         let constructor_ref = &object::create_named_object(account, NAMED_OBJECT_SEED);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             constructor_ref,
@@ -34,7 +34,8 @@ module playground::coin_v2 {
         let mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref);
-        (mint_ref, transfer_ref, burn_ref)
+        let metadata = object::address_to_object<Metadata>(object::address_from_constructor_ref(constructor_ref));
+        (mint_ref, transfer_ref, burn_ref, metadata)
     }
 
     public fun mint(ref: &MintRef, amount: u64): FungibleAsset {
@@ -45,56 +46,48 @@ module playground::coin_v2 {
         fungible_asset::burn(ref, fa)
     }
 
-    public fun deposit(ref: &TransferRef, account_addr: address, fa: FungibleAsset) {
-        let asset = get_metadata();
+    public fun deposit(ref: &TransferRef, asset: Object<Metadata>, account_addr: address, fa: FungibleAsset) {
         let store = primary_fungible_store::ensure_primary_store_exists(account_addr, asset);
         fungible_asset::deposit_with_ref(ref, store, fa)
     }
 
-    public fun withdraw(ref: &TransferRef, account: &signer, amount: u64): FungibleAsset {
-        let asset = get_metadata();
+    public fun withdraw(ref: &TransferRef, asset: Object<Metadata>, account: &signer, amount: u64): FungibleAsset {
         let store = primary_fungible_store::ensure_primary_store_exists(signer::address_of(account), asset);
         fungible_asset::withdraw_with_ref(ref, store, amount)
     }
 
-    public fun transfer(ref: &TransferRef, from: &signer, to: address, amount: u64) {
-        let fa = withdraw(ref, from, amount);
-        deposit(ref, to, fa);
+    public fun transfer(ref: &TransferRef, asset: Object<Metadata>, from: &signer, to: address, amount: u64) {
+        let fa = withdraw(ref, asset, from, amount);
+        deposit(ref, asset, to, fa);
     }
 
     #[view]
-    public fun balance(owner: address): u64 {
-        let asset = get_metadata();
+    public fun balance(asset: Object<Metadata>, owner: address): u64 {
         let store = primary_fungible_store::ensure_primary_store_exists(owner, asset);
         fungible_asset::balance(store)
     }
 
-    #[view]
-    /// Return the address of the managed fungible asset that's created when this module is deployed.
-    public fun get_metadata(): Object<Metadata> {
-        let asset_address = object::create_object_address(&@playground, NAMED_OBJECT_SEED);
-        object::address_to_object<Metadata>(asset_address)
-    }
-
-    #[test(deployer = @playground)]
-    fun e2e_ok(deployer: &signer) {
+    #[test]
+    fun e2e_ok() {
+        let issuer = account::create_account_for_test(@0xBEEF);
         let alice = account::create_account_for_test(@0xA);
         let bob = account::create_account_for_test(@0xB);
-        let (mint_ref, transfer_ref, burn_ref) = initialize(
-            deployer,
+
+        let (mint_ref, transfer_ref, burn_ref, metadata) = initialize(
+            &issuer,
             string::utf8(b"Test Coin"),
             string::utf8(b"TC"),
             8
         );
 
         let fa = mint(&mint_ref, 10000);
-        deposit(&transfer_ref, signer::address_of(&alice), fa);
-        assert!(balance(signer::address_of(&alice)) == 10000, 0);
+        deposit(&transfer_ref, metadata, signer::address_of(&alice), fa);
+        assert!(balance(metadata, signer::address_of(&alice)) == 10000, 0);
 
-        transfer(&transfer_ref, &alice, signer::address_of(&bob), 10000);
-        assert!(balance(signer::address_of(&bob)) == 10000, 0);
+        transfer(&transfer_ref, metadata, &alice, signer::address_of(&bob), 10000);
+        assert!(balance(metadata, signer::address_of(&bob)) == 10000, 0);
 
-        let fa = withdraw(&transfer_ref, &bob, 10000);
+        let fa = withdraw(&transfer_ref, metadata, &bob, 10000);
         assert!(fungible_asset::amount(&fa) == 10000, 0);
 
         burn(&burn_ref, fa);
