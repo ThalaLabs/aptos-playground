@@ -24,14 +24,12 @@ module playground::ctoken {
 
     public fun initialize(
         account: &signer,
-        object_seed: vector<u8>,
         name: String,
         symbol: String,
         decimals: u8
     ): Object<Metadata> {
         let (metadata_object_signer, mint_ref, transfer_ref, burn_ref, metadata) = coin_v2::initialize(
             account,
-            object_seed,
             name,
             symbol,
             decimals
@@ -130,7 +128,6 @@ module playground::ctoken {
 
         let metadata = initialize(
             &issuer,
-            b"TC",
             string::utf8(b"Test Coin"),
             string::utf8(b"TC"),
             8
@@ -157,7 +154,6 @@ module playground::ctoken {
 
         let metadata = initialize(
             &issuer,
-            b"TC",
             string::utf8(b"Test Coin"),
             string::utf8(b"TC"),
             8

@@ -15,12 +15,11 @@ module playground::coin_v2 {
 
     public fun initialize(
         account: &signer,
-        object_seed: vector<u8>,
         name: String,
         symbol: String,
         decimals: u8
     ): (signer, MintRef, TransferRef, BurnRef, Object<Metadata>) {
-        let constructor_ref = &object::create_named_object(account, object_seed);
+        let constructor_ref = &object::create_named_object(account, *string::bytes(&name));
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             constructor_ref,
             option::none(),
@@ -76,7 +75,6 @@ module playground::coin_v2 {
 
         let (_, mint_ref, transfer_ref, burn_ref, metadata) = initialize(
             &issuer,
-            b"TC",
             string::utf8(b"Test Coin"),
             string::utf8(b"TC"),
             8
