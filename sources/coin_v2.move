@@ -4,7 +4,7 @@ module playground::coin_v2 {
     use std::option;
     use std::string::{Self, String};
 
-    use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata, FungibleAsset};
+    use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata};
     use aptos_framework::object::{Self, Object};
     use aptos_framework::primary_fungible_store;
 
@@ -39,42 +39,13 @@ module playground::coin_v2 {
         (metadata_object_signer, mint_ref, transfer_ref, burn_ref, metadata)
     }
 
-    public fun mint(ref: &MintRef, amount: u64): FungibleAsset {
-        fungible_asset::mint(ref, amount)
-    }
-
-    public fun burn(ref: &BurnRef, fa: FungibleAsset) {
-        fungible_asset::burn(ref, fa)
-    }
-
-    public fun deposit(ref: &TransferRef, asset: Object<Metadata>, to: address, fa: FungibleAsset) {
-        let store = primary_fungible_store::ensure_primary_store_exists(to, asset);
-        fungible_asset::deposit_with_ref(ref, store, fa)
-    }
-
-    public fun withdraw(ref: &TransferRef, asset: Object<Metadata>, from: address, amount: u64): FungibleAsset {
-        let store = primary_fungible_store::ensure_primary_store_exists(from, asset);
-        fungible_asset::withdraw_with_ref(ref, store, amount)
-    }
-
-    public fun transfer(ref: &TransferRef, asset: Object<Metadata>, from: address, to: address, amount: u64) {
-        let fa = withdraw(ref, asset, from, amount);
-        deposit(ref, asset, to, fa);
-    }
-
-    #[view]
-    public fun balance(asset: Object<Metadata>, owner: address): u64 {
-        let store = primary_fungible_store::ensure_primary_store_exists(owner, asset);
-        fungible_asset::balance(store)
-    }
-
     #[test]
     fun e2e_ok() {
         let issuer = account::create_account_for_test(@0xBEEF);
         let alice = account::create_account_for_test(@0xA);
         let bob = account::create_account_for_test(@0xB);
 
-        let (_, mint_ref, transfer_ref, burn_ref, metadata) = initialize(
+        let (_, mint_ref, _, burn_ref, metadata) = initialize(
             &issuer,
             b"TC",
             string::utf8(b"Test Coin"),
@@ -82,16 +53,16 @@ module playground::coin_v2 {
             8
         );
 
-        let fa = mint(&mint_ref, 10000);
-        deposit(&transfer_ref, metadata, signer::address_of(&alice), fa);
-        assert!(balance(metadata, signer::address_of(&alice)) == 10000, 0);
+        let fa = fungible_asset::mint(&mint_ref, 10000);
+        primary_fungible_store::deposit(signer::address_of(&alice), fa);
+        assert!(primary_fungible_store::balance(signer::address_of(&alice), metadata) == 10000, 0);
 
-        transfer(&transfer_ref, metadata, signer::address_of(&alice), signer::address_of(&bob), 10000);
-        assert!(balance(metadata, signer::address_of(&bob)) == 10000, 0);
+        primary_fungible_store::transfer(&alice, metadata, signer::address_of(&bob), 10000);
+        assert!(primary_fungible_store::balance(signer::address_of(&bob), metadata) == 10000, 0);
 
-        let fa = withdraw(&transfer_ref, metadata, signer::address_of(&bob), 10000);
+        let fa = primary_fungible_store::withdraw(&bob, metadata, 10000);
         assert!(fungible_asset::amount(&fa) == 10000, 0);
 
-        burn(&burn_ref, fa);
+        fungible_asset::burn(&burn_ref, fa);
     }
 }
