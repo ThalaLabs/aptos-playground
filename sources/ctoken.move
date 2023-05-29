@@ -1,17 +1,14 @@
 module playground::ctoken {
+    use std::option;
     use std::signer;
-    use std::string::String;
+    use std::string::{Self, String};
 
     use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, MintRef, TransferRef, BurnRef};
     use aptos_framework::object::{Self, Object};
     use aptos_framework::primary_fungible_store;
 
-    use playground::coin_v2;
-
     #[test_only]
     use aptos_framework::account;
-    #[test_only]
-    use std::string;
 
     const ERR_CTOKEN_UNAUTHORIZED: u64 = 1;
 
@@ -28,13 +25,21 @@ module playground::ctoken {
         symbol: String,
         decimals: u8
     ): Object<Metadata> {
-        let (metadata_object_signer, mint_ref, transfer_ref, burn_ref, metadata) = coin_v2::initialize(
-            account,
-            object_seed,
+        let constructor_ref = &object::create_named_object(account, object_seed);
+        primary_fungible_store::create_primary_store_enabled_fungible_asset(
+            constructor_ref,
+            option::none(),
             name,
             symbol,
-            decimals
+            decimals,
+            string::utf8(b"http://example.com/favicon.ico"),
+            string::utf8(b"http://example.com"),
         );
+        let mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
+        let burn_ref = fungible_asset::generate_burn_ref(constructor_ref);
+        let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref);
+        let metadata_object_signer = object::generate_signer(constructor_ref);
+        let metadata = object::address_to_object<Metadata>(object::address_from_constructor_ref(constructor_ref));
         move_to(&metadata_object_signer, AdminRefs {
             mint_ref,
             transfer_ref,
@@ -96,10 +101,6 @@ module playground::ctoken {
     ): &AdminRefs acquires AdminRefs {
         assert!(object::is_owner(asset, signer::address_of(owner)), ERR_CTOKEN_UNAUTHORIZED);
         borrow_global<AdminRefs>(object::object_address(&asset))
-    }
-
-    inline fun borrow_transfer_ref(asset: Object<Metadata>): &TransferRef {
-        &borrow_global<AdminRefs>(object::object_address(&asset)).transfer_ref
     }
 
     #[test]
