@@ -1,5 +1,5 @@
 [package]
-name = 'AptosCoinV2Playground'
+name = 'AptosPlayground'
 version = '1.0.0'
 
 [addresses]
