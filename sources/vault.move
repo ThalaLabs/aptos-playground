@@ -5,7 +5,7 @@ module playground::vault {
 
     use aptos_std::table::{Self, Table};
     use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata};
-    use aptos_framework::object::{Self, Object};
+    use aptos_framework::object::{Self, Object, ExtendRef};
 
     #[test_only]
     use aptos_framework::account;
@@ -20,7 +20,9 @@ module playground::vault {
     const ERR_INSUFFICIENT_FUNDS: u64 = 2;
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
-    struct Market has key {}
+    struct Market has key {
+        extend_ref: ExtendRef
+    }
 
     /// Balance keeps track of user assets in different markets
     struct User has key {
@@ -35,7 +37,9 @@ module playground::vault {
         fungible_asset::create_store(constructor_ref, asset);
 
         let obj_signer = object::generate_signer(constructor_ref);
-        move_to(&obj_signer, Market {});
+        move_to(&obj_signer, Market {
+            extend_ref: object::generate_extend_ref(constructor_ref)
+        });
         object::address_to_object<Market>(object::address_from_constructor_ref(constructor_ref))
     }
 
@@ -54,27 +58,32 @@ module playground::vault {
         *balance = *balance + amount;
     }
 
-    // public fun withdraw(
-    //     account: &signer,
-    //     market_obj: Object<Market>,
-    //     amount: u64
-    // ): FungibleAsset acquires User, Market {
-    //     let market = borrow_global<Market>(object::object_address(&market_obj));
-    //     let fa = fungible_asset::withdraw_with_ref(&market.transfer_ref, market_obj, amount);
-    //
-    //     let user = borrow_global_mut<User>(signer::address_of(account));
-    //     let balance = table::borrow_mut_with_default(&mut user.markets, market_obj, 0);
-    //
-    //     assert!(amount <= *balance, ERR_INSUFFICIENT_FUNDS);
-    //     *balance = *balance - amount;
-    //
-    //     fa
-    // }
+    public fun withdraw(
+        account: &signer,
+        market_obj: Object<Market>,
+        amount: u64
+    ): FungibleAsset acquires User, Market {
+        let market_signer = get_market_signer(market_obj);
+        let fa = fungible_asset::withdraw(&market_signer, market_obj, amount);
+
+        let user = borrow_global_mut<User>(signer::address_of(account));
+        let balance = table::borrow_mut_with_default(&mut user.markets, market_obj, 0);
+
+        assert!(amount <= *balance, ERR_INSUFFICIENT_FUNDS);
+        *balance = *balance - amount;
+
+        fa
+    }
 
     #[view]
     public fun balance(account_addr: address, market_obj: Object<Market>): u64 acquires User {
         let user = borrow_global<User>(account_addr);
         *table::borrow_with_default(&user.markets, market_obj, &0)
+    }
+
+    inline fun get_market_signer(market_obj: Object<Market>): signer acquires Market {
+        let ref = &borrow_global<Market>(object::object_address(&market_obj)).extend_ref;
+        object::generate_signer_for_extending(ref)
     }
 
     #[test_only]
@@ -98,7 +107,7 @@ module playground::vault {
     }
 
     #[test(admin = @playground)]
-    fun e2e_ok(admin: &signer) acquires User {
+    fun e2e_ok(admin: &signer) acquires User, Market {
         let fa_issuer = account::create_account_for_test(@0xA);
         let (mint_ref, _, _, asset) = init_fa(&fa_issuer, b"Test Fungible Asset");
 
@@ -109,5 +118,13 @@ module playground::vault {
         deposit(&user, market_obj, fungible_asset::mint(&mint_ref, 100));
         assert!(balance(signer::address_of(&user), market_obj) == 100, 0);
         assert!(fungible_asset::balance(market_obj) == 100, 0);
+
+        let fa = withdraw(&user, market_obj, 100);
+        assert!(fungible_asset::amount(&fa) == 100, 0);
+        assert!(balance(signer::address_of(&user), market_obj) == 0, 0);
+        assert!(fungible_asset::balance(market_obj) == 0, 0);
+
+        // TODO: replace with test_burn
+        fungible_asset::deposit(market_obj, fa);
     }
 }
