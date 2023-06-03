@@ -4,7 +4,7 @@ module playground::vault {
     use std::string;
 
     use aptos_std::table::{Self, Table};
-    use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata};
+    use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, FungibleStore};
     use aptos_framework::object::{Self, Object, ExtendRef};
 
     #[test_only]
@@ -21,7 +21,8 @@ module playground::vault {
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct Market has key {
-        extend_ref: ExtendRef
+        extend_ref: ExtendRef,
+        store: Object<FungibleStore>
     }
 
     /// Balance keeps track of user assets in different markets
@@ -34,19 +35,20 @@ module playground::vault {
 
         let asset_name = fungible_asset::name(asset);
         let constructor_ref = &object::create_named_object(admin, *string::bytes(&asset_name));
-        fungible_asset::create_store(constructor_ref, asset);
-
         let obj_signer = object::generate_signer(constructor_ref);
         move_to(&obj_signer, Market {
-            extend_ref: object::generate_extend_ref(constructor_ref)
+            extend_ref: object::generate_extend_ref(constructor_ref),
+            store: fungible_asset::create_store(constructor_ref, asset)
         });
         object::address_to_object<Market>(object::address_from_constructor_ref(constructor_ref))
     }
 
     /// Deposit fungible asset to a market
-    public fun deposit(account: &signer, market_obj: Object<Market>, fa: FungibleAsset) acquires User {
+    public fun deposit(account: &signer, market_obj: Object<Market>, fa: FungibleAsset) acquires User, Market {
         let amount = fungible_asset::amount(&fa);
-        fungible_asset::deposit(market_obj, fa);
+
+        let market = borrow_global<Market>(object::object_address(&market_obj));
+        fungible_asset::deposit(market.store, fa);
 
         if (!exists<User>(signer::address_of(account))) {
             move_to(account, User {
@@ -64,7 +66,9 @@ module playground::vault {
         amount: u64
     ): FungibleAsset acquires User, Market {
         let market_signer = get_market_signer(market_obj);
-        let fa = fungible_asset::withdraw(&market_signer, market_obj, amount);
+
+        let market = borrow_global<Market>(object::object_address(&market_obj));
+        let fa = fungible_asset::withdraw(&market_signer, market.store, amount);
 
         let user = borrow_global_mut<User>(signer::address_of(account));
         let balance = table::borrow_mut_with_default(&mut user.markets, market_obj, 0);
