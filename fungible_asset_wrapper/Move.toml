@@ -1,0 +1,14 @@
+[package]
+name = 'FungibleAssetWrapper'
+version = '1.0.0'
+upgrade_policy = "immutable"
+
+[addresses]
+deployer = "c829c20a753cd4a2745d2648d8e0faa78bb2e16d44bb6ad09e11ba1a7074401d"
+# aptos account derive-resource-account-address --address c829c20a753cd4a2745d2648d8e0faa78bb2e16d44bb6ad09e11ba1a7074401d --seed fungible_asset_wrapper --seed-encoding utf8
+fungible_asset_wrapper = "1a8fe06202c93c23f519c5aa86df687fa8efc5d28a1bc3232fd29cf2e0614c06"
+
+[dependencies.AptosFramework]
+git = 'https://github.com/aptos-labs/aptos-core.git'
+rev = 'main'
+subdir = 'aptos-move/framework/aptos-framework'
