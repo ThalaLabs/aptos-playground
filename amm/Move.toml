@@ -1,0 +1,12 @@
+[package]
+name = 'AMM'
+version = '1.0.0'
+
+[addresses]
+amm = "8dee32b018588401c5a554a5230ab531a07dd9b1db90e1fe94642b78bd521b98"
+amm_deployer = "052ef5c6ff709a22c921dbd9e13dac01afee87446c99f9c293246492b159b914"
+
+[dependencies.AptosFramework]
+git = 'https://github.com/aptos-labs/aptos-core.git'
+rev = 'main'
+subdir = 'aptos-move/framework/aptos-framework'
